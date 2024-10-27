@@ -1,3 +1,4 @@
+import pickle
 import streamlit as st
 st.set_page_config(layout="wide")
 
@@ -13,31 +14,8 @@ model = 'llama3.1' #"gpt-3.5-turbo-0125"
 # For OpenAI Models
 #openai.api_key = os.getenv("OPENAI_API_KEY")
 
-
 # UI
 st.title('Smart Store Chatbot')
-st.markdown("""
-<style>
-.wrapper {
-    height: auto;
-    min-height: 100%;
-    padding-bottom: 200px;
-    background-color: blue;
-}
-.chat-container {
-    height: 60dvh;
-    height: 60vh;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-}
-.input_container {
-    height: 200px;
-    position: relative;
-    transform: translateY(-100%);
-}
-</style>
-""", unsafe_allow_html=True)
 
 def display_msg(msg):
     with st.chat_message(msg["role"]):
@@ -57,6 +35,12 @@ if prompt := st.chat_input("enter question"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
+        # Retrival
+        with open('faq.pkl', 'rb') as f:
+            b = pickle.load(f)
+        print(b)
+
+        # Gen Response
         stream = get_response(
             client=client,
             model=model,
