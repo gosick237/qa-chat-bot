@@ -1,56 +1,90 @@
-import pickle
 import streamlit as st
-st.set_page_config(layout="wide")
-
+from milvus import MilvusPipeline
 from llm import get_response, OpenAI
-from encoder import embedding
+import json, os
 
-# Parameters
-client = OpenAI(
-    base_url='http://localhost:11434/v1',
-    api_key='ollama'
-)
-model = 'llama3.1' #"gpt-3.5-turbo-0125"
-# For OpenAI Models
-#openai.api_key = os.getenv("OPENAI_API_KEY")
+model_name = 'llama3.1' #"gpt-3.5-turbo-0125"
 
-# UI
-st.title('Smart Store Chatbot')
+def load_model_config(model="gpt-3.5-turbo-0125", file_path='./model/model_config.json'):
+    with open(file_path, 'r') as file:
+        model_configs = json.load(file)
+    
+    for config in model_configs:
+        if config["model"] == model:
+            config["api_key"] = os.getenv(config["api_key"])
+            return config
+    
+    raise ValueError(f"Model '{model}' not found in the configuration.")
 
 def display_msg(msg):
     with st.chat_message(msg["role"]):
         st.markdown(f"**{msg['role']}:** {msg['content']}")
 
-# Chat History
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+#@st.cache_resource
+def get_pipeline(_client, model_name):
+    pipeline = MilvusPipeline(
+        client=_client,
+        model_name=model_name,
+        embedding_dim=model_config["embedding_dim"]
+    )
+    # 2) data insert
+    pipeline.insert_data("./data/processed_data_2717.jsonl")
+    # 3) create idx
+    pipeline.create_index("embedding")
+    # 4) load collection
+    pipeline.load_collection()
+    return pipeline
 
-for message in st.session_state.messages:
-    display_msg(message)
+if __name__ == "__main__":
+    # UI
+    st.set_page_config(layout="wide")
+    st.title('Smart Store Chatbot')
 
-# Request
-if prompt := st.chat_input("enter question"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # Initialization
+    model_config = load_model_config(model_name)
+    client = OpenAI(
+        base_url=model_config['base_url'],
+        api_key=model_config['api_key']
+    )
+    pipeline = get_pipeline(client, model_name)
 
-    with st.chat_message("assistant"):
-        # Retrival
-        with open('faq.pkl', 'rb') as f:
-            b = pickle.load(f)
-        print(b)
+    # Chat History
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-        # Gen Response
-        stream = get_response(
-            client=client,
-            model=model,
-            question=prompt,
-            chat_history=st.session_state.messages,
-            context=""
-        )
-        response = st.write_stream(stream)
-        
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content" : response   
-        })
+    for message in st.session_state.messages:
+        display_msg(message)
+    
+    # Request
+    if prompt := st.chat_input("enter question"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            # Retrival (Augmented)
+            ranked_texts = pipeline.retrieve_similar_questions(prompt, 5)
+            # test
+            for i, item in enumerate(ranked_texts):
+                print(f"Result {i + 1}:")
+                print(f"  Question: {item['question']}")
+                print(f"  Category: {item['category']}")
+                print(f"  Answer: {item['answer']}")
+                print(f"  Related: {item['related']}")
+                print(f"  Distance: {item['distance']:.4f}")
+                print()
+
+            # Generate Response
+            stream = get_response(
+                client=client,
+                model=model_name,
+                question=prompt,
+                chat_history=st.session_state.messages,
+                context=ranked_texts
+            )
+            response = st.write_stream(stream)
+            
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content" : response   
+            })
