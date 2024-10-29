@@ -1,9 +1,10 @@
+from time import sleep
 import streamlit as st
 from milvus import MilvusPipeline
 from llm import get_response, OpenAI
 import json, os
 
-model_name = 'llama3.1' #"gpt-3.5-turbo-0125"
+model_name = "gpt-3.5-turbo-0125" #'llama3.1'
 
 def load_model_config(model="gpt-3.5-turbo-0125", file_path='./model/model_config.json'):
     with open(file_path, 'r') as file:
@@ -20,18 +21,27 @@ def display_msg(msg):
     with st.chat_message(msg["role"]):
         st.markdown(f"**{msg['role']}:** {msg['content']}")
 
-def init_milvus(_client, model_name):
+def typewriter(text: str, delay: float = 0.03):
+    placeholder = st.empty()
+    displayed_text = ""
+    for char in text:
+        displayed_text += char
+        placeholder.markdown(displayed_text)
+        sleep(delay)
+    return displayed_text
+        
+def init_milvus(_client, ebedd_modelname):
     if 'milvus_pipe' not in st.session_state:
         with st.spinner('Initializing Milvus...'):
             # 0) set retrieval pipeline
             pipeline = MilvusPipeline(
                 client=_client,
-                model_name=model_name,
+                ebedd_modelname=ebedd_modelname,
                 embedding_dim=model_config["embedding_dim"]
             )
             st.session_state.milvus_pipe = pipeline
             # 1) set collection
-            pipeline.create_collection("qa_collection_llama3_embeddgins")
+            pipeline.create_collection("qa_collection_gpt35_embeddgins")
             # 2) data insert
             pipeline.insert_data("./data/processed_data_2717.jsonl")
             # 3) create idx
@@ -51,7 +61,7 @@ if __name__ == "__main__":
         base_url=model_config['base_url'],
         api_key=model_config['api_key']
     )
-    pipeline = init_milvus(client, model_name)
+    pipeline = init_milvus(client, model_config['embedding_model'])
 
     # Chat History
     if "messages" not in st.session_state:
@@ -68,16 +78,8 @@ if __name__ == "__main__":
 
         with st.chat_message("assistant"):
             # Retrival (Augmented)
-            ranked_texts = pipeline.retrieve_similar_questions(prompt, 5)
-            # test
-            for i, item in enumerate(ranked_texts):
-                print(f"Result {i + 1}:")
-                print(f"  Question: {item['question']}", type(item['question']))
-                print(f"  Category: {item['category']}", type(item['category']))
-                print(f"  Answer: {item['answer']}", type(item['answer']))
-                print(f"  Related: {item['related']}", type(item['related']))
-                print(f"  Distance: {item['distance']:.4f}", type(item['distance']))
-                print()
+            top_k=5
+            ranked_texts = pipeline.retrieve_similar_questions(prompt, top_k, 0.85)
 
             # Generate Response
             stream = get_response(
@@ -88,8 +90,15 @@ if __name__ == "__main__":
                 context=ranked_texts
             )
             response = st.write_stream(stream)
-            
+
+            if len(ranked_texts) :
+                st.write("Related:")
+                related_questions = "\n".join([item['question'] for item in ranked_texts])
+                related_questions=related_questions.replace("\n", "  \n")
+                typewriter(related_questions)
+                response += "\n\nRelated:\n" + related_questions
+        
             st.session_state.messages.append({
                 "role": "assistant",
-                "content" : response   
+                "content" : response
             })

@@ -4,14 +4,14 @@ from pymilvus import connections, FieldSchema, CollectionSchema, Collection, Dat
 import json
 
 class MilvusPipeline:
-    def __init__(self, client: OpenAI, model_name: str, embedding_dim):
+    def __init__(self, client: OpenAI, ebedd_modelname: str, embedding_dim):
         self.host="localhost"
         self.port="19530"
         self.collection = None
         self.embedding_dim = embedding_dim
         # for embedding model
         self.embedding_client = client
-        self.model_name = model_name
+        self.ebedd_modelname = ebedd_modelname
         self.connect()
 
     def connect(self):
@@ -36,7 +36,7 @@ class MilvusPipeline:
         schema = CollectionSchema(fields=fields, description="Schema for embedding collection")
 
         # Temporary..
-        #utility.drop_collection(collection_name)
+        utility.drop_collection(collection_name)
         # Exsiting Collection
         if utility.has_collection(collection_name):
             self.collection = Collection(collection_name)
@@ -93,13 +93,25 @@ class MilvusPipeline:
                 raise
         
     def create_index(self, field_name):
-        index_params = {
-            "metric_type": "IP",
-            "index_type": "IVF_FLAT",
-            "params": {"nlist": 1024}
-        }
-        self.collection.create_index(field_name=field_name, index_params=index_params)
-        print(f"Index created on field {field_name}.")
+        if self.collection is None:
+            raise ValueError("Collection is not initialized. Call create_collection first.")
+        else :
+            index_info = self.collection.index().params
+            
+            index_params = {
+                "metric_type": "L2",
+                "index_type": "IVF_FLAT",
+                "params": {"nlist": 256}
+            }
+
+            if index_info["metric_type"] != index_params["metric_type"] or index_info["params"] != index_params["params"] :
+                self.collection.release()
+                self.collection.drop_index()
+            try:
+                self.collection.create_index(field_name=field_name, index_params=index_params)
+                print(f"Index created on field {field_name}.")
+            except Exception as e:
+                print(f"Failed to update index parameters")
     
     def load_collection(self):
         self.collection.load()
@@ -117,13 +129,13 @@ class MilvusPipeline:
 
     def get_embedding(self, texts):
         response = self.embedding_client.embeddings.create(
-            model=self.model_name,
+            model=self.ebedd_modelname,
             input=texts
         )
         print(f"... ({len(texts)})-embedding ...\n  {texts[-1]}")
         return [data.embedding for data in response.data]
 
-    def retrieve_similar_questions(self, prompt, n=5):
+    def retrieve_similar_questions(self, prompt, top_k=5, threshold=0.5):
         query_embedding = self.get_embedding([prompt])[0]
         print("-"*80)
         print("Query embedding type:", type(query_embedding), type(query_embedding[0]))
@@ -131,14 +143,14 @@ class MilvusPipeline:
         
         search_params = {
             # IP(InnerProduct), L2(Uclidean), Cosine
-            "metric_type": "IP",
+            "metric_type": "L2",
             "params": {"nprobe": 10}
         }
         results = self.collection.search(
             data=[query_embedding],
             anns_field="embedding", # target vector
             param=search_params,
-            limit=n,
+            limit=top_k,
             output_fields=["question", "category", "answer", "related"]  # output column
         )
         
@@ -148,8 +160,19 @@ class MilvusPipeline:
                 "category": result.entity.get("category"),
                 "answer": result.entity.get("answer"),
                 "related": result.entity.get("related"),
-                "distance": result.distance
+                "score": 1 / (1 + result.distance)
             }
             for result in results[0]
         ]
-        return ranked_results
+        # 결과 출력
+        print(f"\nQuery: {prompt}")
+        print(f"Top {top_k} similar questions:")
+        for i, result in enumerate(ranked_results, 1):
+            print(f"\n{i}. Question: {result['question']}")
+            print(f"   Answer: {result['answer']}")
+            print(f"   Score: {result['score']:.4f}")
+        
+        filtered_results = [q for q in ranked_results if q['score'] >= threshold]
+        print("-------------", len(filtered_results))
+        results = filtered_results[:top_k] if len(filtered_results) > top_k else filtered_results
+        return results
