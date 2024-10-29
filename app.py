@@ -20,20 +20,25 @@ def display_msg(msg):
     with st.chat_message(msg["role"]):
         st.markdown(f"**{msg['role']}:** {msg['content']}")
 
-#@st.cache_resource
-def get_pipeline(_client, model_name):
-    pipeline = MilvusPipeline(
-        client=_client,
-        model_name=model_name,
-        embedding_dim=model_config["embedding_dim"]
-    )
-    # 2) data insert
-    pipeline.insert_data("./data/processed_data_2717.jsonl")
-    # 3) create idx
-    pipeline.create_index("embedding")
-    # 4) load collection
-    pipeline.load_collection()
-    return pipeline
+def init_milvus(_client, model_name):
+    if 'milvus_pipe' not in st.session_state:
+        with st.spinner('Initializing Milvus...'):
+            # 0) set retrieval pipeline
+            pipeline = MilvusPipeline(
+                client=_client,
+                model_name=model_name,
+                embedding_dim=model_config["embedding_dim"]
+            )
+            st.session_state.milvus_pipe = pipeline
+            # 1) set collection
+            pipeline.create_collection("qa_collection_llama3_embeddgins")
+            # 2) data insert
+            pipeline.insert_data("./data/processed_data_2717.jsonl")
+            # 3) create idx
+            pipeline.create_index("embedding")
+            # 4) load collection
+            pipeline.load_collection()
+    return st.session_state.milvus_pipe
 
 if __name__ == "__main__":
     # UI
@@ -46,7 +51,7 @@ if __name__ == "__main__":
         base_url=model_config['base_url'],
         api_key=model_config['api_key']
     )
-    pipeline = get_pipeline(client, model_name)
+    pipeline = init_milvus(client, model_name)
 
     # Chat History
     if "messages" not in st.session_state:
@@ -67,11 +72,11 @@ if __name__ == "__main__":
             # test
             for i, item in enumerate(ranked_texts):
                 print(f"Result {i + 1}:")
-                print(f"  Question: {item['question']}")
-                print(f"  Category: {item['category']}")
-                print(f"  Answer: {item['answer']}")
-                print(f"  Related: {item['related']}")
-                print(f"  Distance: {item['distance']:.4f}")
+                print(f"  Question: {item['question']}", type(item['question']))
+                print(f"  Category: {item['category']}", type(item['category']))
+                print(f"  Answer: {item['answer']}", type(item['answer']))
+                print(f"  Related: {item['related']}", type(item['related']))
+                print(f"  Distance: {item['distance']:.4f}", type(item['distance']))
                 print()
 
             # Generate Response
