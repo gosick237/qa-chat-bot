@@ -14,21 +14,19 @@ def get_response(client: OpenAI, model: str, question: str, chat_history: list, 
             related_qa.append(f"""{id}. question: {item["question"]}, answer: {item["answer"]}""")
     related_qa = "\n".join(related_qa)
 
-    SYSTEM_PROMPT = """You are an AI assistant for a smart store FAQ chatbot. Your role is to provide appropriate answers to questions related to the smart store. If a question is unrelated to the smart store, respond with "Not relevant"."""
-    """
-    당신은 주어진 질문에 적절한 답변을 하는 스마트 스토어 FAQ 챗봇입니다. (역할을 벗어나는 질문은 "관련 없음"으로 답변)
-    '관련 질문과 답변들'이 주어질 경우, '관련 질문과 답변들'을 근거로 사용하여 '질문'에 대한 답변을 해주세요.
-    (단, 주어진 '관련 질문과 답변들'이 '질문'과 연관성이 없다면 무시.)
-    """
-    USER_PROMPT = f"""
-When given 'Related qa', use them as a reference to answer the 'Question'. If the 'Related Questions and Answers' are not relevant to the 'Question', ignore them.
+    SYSTEM_PROMPT = """You are an AI assistant for a smart store FAQ chatbot. Your role is to provide appropriate answers to questions related to the smart store.
+When given 'Related_QA', use them as a reference to answer the 'Question'.
+Additionaly show related questions ('Related: ') that is related to given 'Question'.
+
 Instructions:
 1. Analyze the 'Question' carefully.
 2. Review the 'Related Questions and Answers' for relevant information.
 3. If the question is about the smart store, provide a concise and accurate answer based on the related information.
-4. If the question is unrelated to the smart store, respond with "Not relevant".
+4. If the question is unrelated to the smart store, respond with "저는 스마트 스토어 FAQ를 위한 챗봇입니다. 스마트 스토어에 대한 질문을 부탁드립니다.".
 5. Always maintain a professional and helpful tone.
-6. Use Korean when question is korean
+6. Add 'Related: ', based on given 'Related_QA' and chat_history (maximum 5)
+"""
+    USER_PROMPT = f"""
 Related_QA :
 {related_qa}
 Question :

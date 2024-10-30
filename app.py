@@ -1,4 +1,3 @@
-from time import sleep
 import streamlit as st
 from milvus import MilvusPipeline
 from llm import get_response, OpenAI
@@ -20,15 +19,6 @@ def load_model_config(model="gpt-3.5-turbo-0125", file_path='./model/model_confi
 def display_msg(msg):
     with st.chat_message(msg["role"]):
         st.markdown(f"**{msg['role']}:** {msg['content']}")
-
-def typewriter(text: str, delay: float = 0.03):
-    placeholder = st.empty()
-    displayed_text = ""
-    for char in text:
-        displayed_text += char
-        placeholder.markdown(displayed_text)
-        sleep(delay)
-    return displayed_text
         
 def init_milvus(_client, ebedd_modelname):
     if 'milvus_pipe' not in st.session_state:
@@ -42,7 +32,7 @@ def init_milvus(_client, ebedd_modelname):
             st.session_state.milvus_pipe = pipeline
             # 1) set collection
             pipeline.create_collection("qa_collection_gpt35_embeddgins")
-            # 2) data insert
+            # 2) data insert # Not nessasary if db is already set.
             pipeline.insert_data("./data/processed_data_2717.jsonl")
             # 3) create idx
             pipeline.create_index("embedding", "qa_collection_gpt35_embeddgins")
@@ -79,7 +69,7 @@ if __name__ == "__main__":
         with st.chat_message("assistant"):
             # Retrival (Augmented)
             top_k=5
-            ranked_texts = pipeline.retrieve_similar_questions(prompt, top_k, 0.85)
+            ranked_texts = pipeline.retrieve_similar_questions(prompt, top_k, 0.8)
 
             # Generate Response
             stream = get_response(
@@ -90,13 +80,6 @@ if __name__ == "__main__":
                 context=ranked_texts
             )
             response = st.write_stream(stream)
-
-            if len(ranked_texts) :
-                st.write("Related:")
-                related_questions = "\n".join([item['question'] for item in ranked_texts])
-                related_questions=related_questions.replace("\n", "  \n")
-                typewriter(related_questions)
-                response += "\n\nRelated:\n" + related_questions
         
             st.session_state.messages.append({
                 "role": "assistant",

@@ -4,6 +4,9 @@ from pymilvus import connections, FieldSchema, CollectionSchema, Collection, Dat
 import json
 
 class MilvusPipeline:
+    """
+    : Class for pipeline that set data(by milvus) and search related question
+    """
     def __init__(self, client: OpenAI, ebedd_modelname: str, embedding_dim):
         self.host="localhost"
         self.port="19530"
@@ -12,6 +15,7 @@ class MilvusPipeline:
         # for embedding model
         self.embedding_client = client
         self.ebedd_modelname = ebedd_modelname
+
         self.connect()
 
     def connect(self):
@@ -166,7 +170,8 @@ class MilvusPipeline:
             }
             for result in results[0]
         ]
-        # 결과 출력
+
+        # result check
         print(f"\nQuery: {prompt}")
         print(f"Top {top_k} similar questions:")
         for i, result in enumerate(ranked_results, 1):
@@ -175,6 +180,7 @@ class MilvusPipeline:
             print(f"   Score: {result['score']:.4f}")
         
         filtered_results = [q for q in ranked_results if q['score'] >= threshold]
-        print("-------------", len(filtered_results))
+        print("\nFiltered question num: ", len(filtered_results), "-"*20)
+
         results = filtered_results[:top_k] if len(filtered_results) > top_k else filtered_results
         return results
