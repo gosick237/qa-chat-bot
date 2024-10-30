@@ -45,7 +45,7 @@ def init_milvus(_client, ebedd_modelname):
             # 2) data insert
             pipeline.insert_data("./data/processed_data_2717.jsonl")
             # 3) create idx
-            pipeline.create_index("embedding")
+            pipeline.create_index("embedding", "qa_collection_gpt35_embeddgins")
             # 4) load collection
             pipeline.load_collection()
     return st.session_state.milvus_pipe

@@ -36,7 +36,7 @@ class MilvusPipeline:
         schema = CollectionSchema(fields=fields, description="Schema for embedding collection")
 
         # Temporary..
-        utility.drop_collection(collection_name)
+        #utility.drop_collection(collection_name)
         # Exsiting Collection
         if utility.has_collection(collection_name):
             self.collection = Collection(collection_name)
@@ -92,25 +92,23 @@ class MilvusPipeline:
             except Exception as e:
                 raise
         
-    def create_index(self, field_name):
+    def create_index(self, field_name, collection_name):
         if self.collection is None:
             raise ValueError("Collection is not initialized. Call create_collection first.")
         else :
-            index_info = self.collection.index().params
-            
             index_params = {
                 "metric_type": "L2",
                 "index_type": "IVF_FLAT",
                 "params": {"nlist": 256}
             }
-
-            if index_info["metric_type"] != index_params["metric_type"] or index_info["params"] != index_params["params"] :
-                self.collection.release()
-                self.collection.drop_index()
             try:
                 self.collection.create_index(field_name=field_name, index_params=index_params)
                 print(f"Index created on field {field_name}.")
             except Exception as e:
+                if self.collection.has_index():
+                    print("indexes", self.collection.indexes)
+                    self.collection.release()
+                    self.collection.drop_index()
                 print(f"Failed to update index parameters")
     
     def load_collection(self):
@@ -128,12 +126,16 @@ class MilvusPipeline:
         connections.disconnect("default")
 
     def get_embedding(self, texts):
-        response = self.embedding_client.embeddings.create(
-            model=self.ebedd_modelname,
-            input=texts
-        )
+        embeddings = []
+        for i in range(0, len(texts), 100):
+            batch = texts[i:i + 100]
+            response = self.embedding_client.embeddings.create(
+                input=batch,
+                model=self.ebedd_modelname
+            )
+            embeddings.extend([data.embedding for data in response.data])
         print(f"... ({len(texts)})-embedding ...\n  {texts[-1]}")
-        return [data.embedding for data in response.data]
+        return embeddings
 
     def retrieve_similar_questions(self, prompt, top_k=5, threshold=0.5):
         query_embedding = self.get_embedding([prompt])[0]
