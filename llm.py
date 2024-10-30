@@ -24,7 +24,7 @@ Instructions:
 3. If the question is about the smart store, provide a concise and accurate answer based on the related information.
 4. If the question is unrelated to the smart store, respond with "저는 스마트 스토어 FAQ를 위한 챗봇입니다. 스마트 스토어에 대한 질문을 부탁드립니다.".
 5. Always maintain a professional and helpful tone.
-6. Add 'Related: ', based on given 'Related_QA' and chat_history (maximum 5)
+6. Add 'Related: ', based on given 'Related_QA' and chat_history (maximum 5 question displayed with new line)
 """
     USER_PROMPT = f"""
 Related_QA :
